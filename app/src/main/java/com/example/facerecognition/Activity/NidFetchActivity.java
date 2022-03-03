@@ -52,6 +52,7 @@ public class NidFetchActivity extends AppCompatActivity {
                 Intent intent = new Intent(NidFetchActivity.this, CameraViewActivity.class);
                 intent.putExtra("harun",encodedImage);
                 startActivity(intent);
+                finish();
 
 
 

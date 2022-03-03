@@ -31,6 +31,7 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
@@ -83,6 +84,15 @@ public class CameraViewActivity extends AppCompatActivity {
 
     String encodedImage;
     Bitmap serverImage;
+
+
+
+    float leftEyeOpen ,rightEyeOpen,value = 0;
+
+    int state=0;
+    int leftEye,rightEye;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -257,18 +267,42 @@ public class CameraViewActivity extends AppCompatActivity {
                                             new OnSuccessListener<List<Face>>() {
                                                 @Override
                                                 public void onSuccess(List<Face> faces) {
-                                                    try {
+                                                   if(faces.size()!=0) {
+                                                       Face face = faces.get(0);
+                                                       try {
+                                                           headRotationDetect(faces, toBitmap(mediaImage), imageProxy);
+                                                           imageProxy.close();
+                                                       } catch (MlKitException e) {
+                                                           e.printStackTrace();
+                                                       } catch (InterruptedException e) {
+                                                           e.printStackTrace();
+                                                       }
+                                                       //headRotationDetect(faces,toBitmap(mediaImage),imageProxy);
+//                                                           if (face.getLeftEyeOpenProbability() != null && face.getRightEyeOpenProbability() != null) {
+//                                                                leftEyeOpen = face.getLeftEyeOpenProbability();
+//                                                                rightEyeOpen = face.getRightEyeOpenProbability();
+//
+//                                                                blink(leftEyeOpen,rightEyeOpen);
+//
+//                                                           }
+//                                                       Handler handler = new Handler();
+//                                                        handler.postDelayed(new Runnable() {
+//                                                            @Override
+//                                                            public void run() {
+//                                                                verification(faces,image,toBitmap(mediaImage),imageProxy);
+//                                                                imageProxy.close();
+//                                                            }
+//                                                        },10000);
 
-//                                                        headRotationDetect(faces, image, toBitmap(mediaImage), imageProxy);
-                                                        headRotationDetect(faces,toBitmap(mediaImage),imageProxy);
-                                                        imageProxy.close();
+
+
+                                                   }
 
 
 
 
-                                                    } catch (MlKitException | InterruptedException e) {
-                                                        e.printStackTrace();
-                                                    }
+
+
                                                 }
                                             })
                                     .addOnFailureListener(
@@ -321,7 +355,50 @@ public class CameraViewActivity extends AppCompatActivity {
 
     }
 
+    private void verification(List<Face> faces, InputImage image, Bitmap capturedBitmap, ImageProxy imageProxy) {
+        if(state==0){
+            Bitmap capBit = getResizedBitmap(capturedBitmap,900,600);
+            Bitmap rotatBitmap = rotateBitmap(capBit,imageProxy.getImageInfo().getRotationDegrees(),false,false);
 
+            VerifyNid verifyNid = new VerifyNid(serverImage,rotatBitmap,CameraViewActivity.this);
+            Double d = verifyNid.verify();
+            Log.e("ResultVeri",d+"");
+//            task = (DownloadFilesTask) new DownloadFilesTask().execute(verifyNid);
+        }
+    }
+
+    private void blink(float leftValue,float rightValue) {
+
+        Log.e("blinkValue",leftValue+"/"+rightValue);
+            switch (state) {
+                case 0:
+                    if (value > 0.85f) {
+                        // Both eyes are initially open
+                        state = 1;
+                        //Toast.makeText(getApplicationContext(),"Please blink your eyes !!",Toast.LENGTH_SHORT).show();
+                    }
+                    break;
+
+                case 1:
+                    if (value < 0.4f) {
+                        // Both eyes become closed
+                        state = 2;
+                        //Toast.makeText(getApplicationContext(),"Please blink your eyes !!",Toast.LENGTH_SHORT).show();
+                    }
+                    break;
+                case 2:
+                    if (value > 0.85f) {
+                        // Both eyes are open again
+                        state = 0;
+                        Log.e("BlinkTracker", "blink occurred!" +"  => " + state);
+
+                        //recognizeFace(state);
+
+                    }
+                    break;
+
+        }
+    }
 
 
     private void headRotationDetect(List<Face> faces,Bitmap capturedBitmap,ImageProxy imageProxy) throws MlKitException, InterruptedException {
@@ -334,11 +411,11 @@ public class CameraViewActivity extends AppCompatActivity {
             float rotZ = face.getHeadEulerAngleZ();
 
 
-            Log.e("rotY", String.valueOf(rotY));
+            Log.e("rotY", String.valueOf(rotY)+"/flag = "+flag+"");
 
 
             if(flag==2 || flag == 3){
-                if (rotY < -18) {
+                if (rotY<=-8) {
 
 
 
@@ -371,7 +448,7 @@ public class CameraViewActivity extends AppCompatActivity {
             }
 
             if(flag==1){
-                if (rotY > 18) {
+                if (rotY > 8) {
 
 
 //                left.setBackgroundTintList(getResources().getColorStateList(R.color.green));
@@ -397,19 +474,21 @@ public class CameraViewActivity extends AppCompatActivity {
 //
 //                    Log.e("Similarity",text);
 
+
+                    left.setBackgroundTintList(getResources().getColorStateList(R.color.green));
+                    text_view.setText("Move your head right slowly------>");
+
                     flag = 2;
 
 
+
+
             }
             }
-
-
-
-            Log.e("flag",String.valueOf(flag));
 
             if(flag!=1 && flag==0){
                 text_view.setText("Please wait at least 5 seconds");
-                if (rotY > -20 && rotY < 15) {
+                if (rotY > -8 && rotY < 8) {
                 //front face detect
 
 
@@ -610,49 +689,52 @@ public class CameraViewActivity extends AppCompatActivity {
     }
 
     private void result(Double aDouble) {
+        Log.e("StateLess",String.valueOf(aDouble));
 
         if(aDouble!=null){
 
             runOnUiThread(new Runnable() {
                 public void run() {
-                    if(aDouble<20.00 && aDouble>0.00){
-
-                        task.cancel(true);
-
-                        if(flag==0){
-                            flag=1;
-                        }
 
 
-                        if(flag==1){
-                            front.setBackgroundTintList(getResources().getColorStateList(R.color.green));
-                            text_view.setText("Move your face left side & wait 5 seconds");
-                        }
-                        if(flag==2){
-                            left.setBackgroundTintList(getResources().getColorStateList(R.color.green));
-                            text_view.setText("Move your face right side & wait 5 seconds");
-                        }
-                        if(flag==3){
-                            right.setBackgroundTintList(getResources().getColorStateList(R.color.green));
-                            Intent intent = new Intent(CameraViewActivity.this,NidFetchActivity.class);
+                        if(aDouble<20.00 && aDouble>0.00){
 
-                            try {
-                                Thread.sleep(1000);
-                                startActivity(intent);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
+                            task.cancel(true);
+
+                            if(flag==0){
+                                flag=1;
                             }
-                            flag = 0;
-                            finish();
+                            if(flag==1){
+                                front.setBackgroundTintList(getResources().getColorStateList(R.color.green));
+                                text_view.setText("<------Move your head left slowly");
+                            }
+//                            if(flag==2){
+//                                left.setBackgroundTintList(getResources().getColorStateList(R.color.green));
+//                                text_view.setText("Move your head right slowly------>");
+//                            }
+                            if(flag==3){
+                                right.setBackgroundTintList(getResources().getColorStateList(R.color.green));
+                                Intent intent = new Intent(CameraViewActivity.this,NidFetchActivity.class);
+
+                                try {
+                                    Thread.sleep(1000);
+                                    startActivity(intent);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                                flag = 0;
+                                finish();
+
+                            }
+
+
+                        }
+                        if(aDouble>=20.00){
+                            Toast.makeText(CameraViewActivity.this, "Unverified", Toast.LENGTH_SHORT).show();
+                            task.cancel(true);
 
                         }
 
-
-                    }
-                    if(aDouble>=20.00){
-                        Toast.makeText(CameraViewActivity.this, "Unverified", Toast.LENGTH_SHORT).show();
-                        task.cancel(true);
-                    }
 
                 }
             });
@@ -704,8 +786,11 @@ public class CameraViewActivity extends AppCompatActivity {
     }
 
 
-
-
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        task.cancel(true);
+    }
 }
 
 
